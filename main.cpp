@@ -5,13 +5,15 @@
 #include <ws2tcpip.h>
 #include <windows.h>
 #include <wincrypt.h>
+#include <thread>
+#include <chrono>
 
 #pragma comment(lib, "Ws2_32.lib")
 #pragma comment(lib, "Advapi32.lib")
 
 #define PORT 54000
 
-// ======== Токен =========
+// ======== Token functions =========
 bool encryptToFile(const std::string& data, const std::string& outputPath) {
     HCRYPTPROV hProv = NULL;
     HCRYPTHASH hHash = NULL;
@@ -81,8 +83,19 @@ bool decryptFile(const std::string& inputPath, std::string& output) {
     return true;
 }
 
-// ======== Сервер =========
+// ======== Server =========
+void ensureServerDbExists() {
+    std::ifstream check("server_db.txt");
+    if (!check.good()) {
+        std::ofstream create("server_db.txt");
+        create << "Artem 12345";
+        create << "Alice qwerty";
+        create.close();
+        std::cout << "[Info] 'server_db.txt' created with default users.";
+    }
+}
 void runServer() {
+    ensureServerDbExists(); {
     WSADATA wsaData;
     SOCKET listening, clientSocket;
     sockaddr_in serverHint, client;
@@ -112,6 +125,7 @@ void runServer() {
         std::string id = received.substr(0, delimiterPos);
         std::string password = received.substr(delimiterPos + 1);
 
+
         std::ifstream file("server_db.txt");
         std::string line;
         bool success = false;
@@ -136,7 +150,7 @@ void runServer() {
     WSACleanup();
 }
 
-// ======== Клієнт =========
+// ======== Client =========
 void runClient() {
     WSADATA wsaData;
     SOCKET sock;
@@ -171,18 +185,18 @@ void runClient() {
     WSACleanup();
 }
 
-// ======== Головне меню =========
+// ======== Main =========
 int main() {
     int choice;
     do {
-        std::cout << "\n=== Меню ===\n";
-        std::cout << "1. Створити токен\n";
-        std::cout << "2. Запустити сервер\n";
-        std::cout << "3. Запустити клієнта\n";
-        std::cout << "0. Вийти\n";
-        std::cout << "Ваш вибір: ";
+        std::cout << "\n=== Menu ===\n";
+        std::cout << "1. Create token\n";
+        std::cout << "2. Start server only\n";
+        std::cout << "3. Start server and client in one run\n";
+        std::cout << "0. Exit\n";
+        std::cout << "Your choice: ";
         std::cin >> choice;
-        std::cin.ignore(); // прибрати Enter
+        std::cin.ignore();
 
         switch (choice) {
             case 1: {
@@ -202,14 +216,20 @@ int main() {
             case 2:
                 runServer();
                 break;
-            case 3:
+            case 3: {
+                std::cout << "[Info] Starting server in background...\n";
+                std::thread serverThread(runServer);
+                std::this_thread::sleep_for(std::chrono::seconds(1));
+                std::cout << "[Info] Starting client...\n";
                 runClient();
+                serverThread.join();
                 break;
+            }
             case 0:
-                std::cout << "Вихід...\n";
+                std::cout << "Exiting...\n";
                 break;
             default:
-                std::cout << "Невірний вибір!\n";
+                std::cout << "Invalid choice!\n";
         }
 
     } while (choice != 0);
